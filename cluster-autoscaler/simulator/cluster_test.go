@@ -224,6 +224,7 @@ func TestFindNodesToRemove(t *testing.T) {
 	}
 
 	var candidates, allNodes []*apiv1.Node
+	var nodeNameToNodeInfo map[string]*schedulercache.NodeInfo
 	pods := []*apiv1.Pod{pod1, pod2, pod3, pod4}
 	predicateChecker := NewTestPredicateChecker()
 	tracker := NewUsageTracker()
@@ -231,8 +232,9 @@ func TestFindNodesToRemove(t *testing.T) {
 	// just an empty node, should be removed
 	candidates = []*apiv1.Node{emptyNode}
 	allNodes = []*apiv1.Node{emptyNode}
+	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
 	toRemove, _, err := FindNodesToRemove(
-		candidates, allNodes, pods, nil, predicateChecker, len(allNodes),
+		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
 		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
 	assert.NoError(t, err)
 	assert.Equal(t, toRemove, []NodeToBeRemoved{emptyNodeToRemove})
@@ -240,8 +242,9 @@ func TestFindNodesToRemove(t *testing.T) {
 	// just a drainable node, but nowhere for pods to go to
 	candidates = []*apiv1.Node{drainableNode}
 	allNodes = []*apiv1.Node{drainableNode}
+	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
 	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, pods, nil, predicateChecker, len(allNodes),
+		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
 		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
 	assert.NoError(t, err)
 	assert.Equal(t, toRemove, []NodeToBeRemoved{})
@@ -249,8 +252,9 @@ func TestFindNodesToRemove(t *testing.T) {
 	// drainable node, and a mostly empty node that can take its pods
 	candidates = []*apiv1.Node{drainableNode, nonDrainableNode}
 	allNodes = []*apiv1.Node{drainableNode, nonDrainableNode}
+	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
 	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, pods, nil, predicateChecker, len(allNodes),
+		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
 		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
 	assert.NoError(t, err)
 	assert.Equal(t, toRemove, []NodeToBeRemoved{drainableNodeToRemove})
@@ -258,8 +262,9 @@ func TestFindNodesToRemove(t *testing.T) {
 	// drainable node, and a full node that cannot fit anymore pods
 	candidates = []*apiv1.Node{drainableNode}
 	allNodes = []*apiv1.Node{drainableNode, fullNode}
+	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
 	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, pods, nil, predicateChecker, len(allNodes),
+		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
 		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
 	assert.NoError(t, err)
 	assert.Equal(t, toRemove, []NodeToBeRemoved{})
@@ -267,10 +272,10 @@ func TestFindNodesToRemove(t *testing.T) {
 	// 4 nodes, 1 empty, 1 drainable
 	candidates = []*apiv1.Node{emptyNode, drainableNode}
 	allNodes = []*apiv1.Node{emptyNode, drainableNode, fullNode, nonDrainableNode}
+	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
 	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, pods, nil, predicateChecker, len(allNodes),
+		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
 		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
 	assert.NoError(t, err)
 	assert.Equal(t, toRemove, []NodeToBeRemoved{emptyNodeToRemove, drainableNodeToRemove})
-
 }

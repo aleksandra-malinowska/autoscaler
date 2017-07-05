@@ -54,14 +54,14 @@ type NodeToBeRemoved struct {
 
 // FindNodesToRemove finds nodes that can be removed. Returns also an information about good
 // rescheduling location for each of the pods.
-func FindNodesToRemove(candidates []*apiv1.Node, allNodes []*apiv1.Node, pods []*apiv1.Pod,
+func FindNodesToRemove(candidates []*apiv1.Node, allNodes []*apiv1.Node,
+	nodeNameToNodeInfo map[string]*schedulercache.NodeInfo, pods []*apiv1.Pod,
 	client client.Interface, predicateChecker *PredicateChecker, maxCount int,
 	fastCheck bool, oldHints map[string]string, usageTracker *UsageTracker,
 	timestamp time.Time,
 	podDisruptionBudgets []*policyv1.PodDisruptionBudget,
 ) (nodesToRemove []NodeToBeRemoved, podReschedulingHints map[string]string, finalError errors.AutoscalerError) {
 
-	nodeNameToNodeInfo := schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
 	result := make([]NodeToBeRemoved, 0)
 
 	evaluationType := "Detailed evaluation"

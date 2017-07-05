@@ -117,7 +117,7 @@ func (p *PredicateChecker) CheckPredicates(pod *apiv1.Pod, nodeInfo *schedulerca
 			nodename = nodeInfo.Node().Name
 		}
 		if err != nil {
-			return fmt.Errorf("%s predicate error, cannot put %s/%s on %s due to, error %v", name, pod.Namespace,
+			return fmt.Errorf("%s predicate error, cannot put %s/%s on %s due to error %v", name, pod.Namespace,
 				pod.Name, nodename, err)
 		}
 		if !match {

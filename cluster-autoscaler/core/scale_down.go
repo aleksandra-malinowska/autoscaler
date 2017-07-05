@@ -125,7 +125,6 @@ func (sd *ScaleDown) UpdateUnneededNodes(
 	// Phase1 - look at the nodes utilization. Calculate the utilization
 	// only for the managed nodes.
 	for _, node := range managedNodes {
-
 		// Skip nodes marked to be deleted, if they were marked recently.
 		// Old-time marked nodes are again eligible for deletion - something went wrong with them
 		// and they have not been deleted.
@@ -156,8 +155,8 @@ func (sd *ScaleDown) UpdateUnneededNodes(
 	}
 
 	// Phase2 - check which nodes can be probably removed using fast drain.
-	nodesToRemove, newHints, simulatorErr := simulator.FindNodesToRemove(currentlyUnneededNodes, nodes, pods,
-		nil, sd.context.PredicateChecker,
+	nodesToRemove, newHints, simulatorErr := simulator.FindNodesToRemove(currentlyUnneededNodes, nodes,
+		nodeNameToNodeInfo, pods, nil, sd.context.PredicateChecker,
 		len(currentlyUnneededNodes), true, sd.podLocationHints, sd.usageTracker, timestamp, pdbs)
 	if simulatorErr != nil {
 		glog.Errorf("Error while simulating node drains: %v", simulatorErr)
@@ -172,10 +171,10 @@ func (sd *ScaleDown) UpdateUnneededNodes(
 
 	// Update the timestamp map.
 	result := make(map[string]time.Time)
-	unneadedNodeList := make([]*apiv1.Node, 0, len(nodesToRemove))
+	unneededNodeList := make([]*apiv1.Node, 0, len(nodesToRemove))
 	for _, node := range nodesToRemove {
 		name := node.Node.Name
-		unneadedNodeList = append(unneadedNodeList, node.Node)
+		unneededNodeList = append(unneededNodeList, node.Node)
 		if val, found := sd.unneededNodes[name]; !found {
 			result[name] = timestamp
 		} else {
@@ -183,7 +182,7 @@ func (sd *ScaleDown) UpdateUnneededNodes(
 		}
 	}
 
-	sd.unneededNodesList = unneadedNodeList
+	sd.unneededNodesList = unneededNodeList
 	sd.unneededNodes = result
 	sd.podLocationHints = newHints
 	sd.nodeUtilizationMap = utilizationMap
@@ -298,8 +297,9 @@ func (sd *ScaleDown) TryToScaleDown(nodes []*apiv1.Node, pods []*apiv1.Pod, pdbs
 	}
 
 	// We look for only 1 node so new hints may be incomplete.
-	nodesToRemove, _, err := simulator.FindNodesToRemove(candidates, nodes, pods, sd.context.ClientSet,
-		sd.context.PredicateChecker, 1, false,
+	nodeNameToNodeInfo := schedulercache.CreateNodeNameToInfoMap(pods, nodes)
+	nodesToRemove, _, err := simulator.FindNodesToRemove(candidates, nodes, nodeNameToNodeInfo,
+		pods, sd.context.ClientSet, sd.context.PredicateChecker, 1, false,
 		sd.podLocationHints, sd.usageTracker, time.Now(), pdbs)
 
 	if err != nil {
