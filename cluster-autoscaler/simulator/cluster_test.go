@@ -17,6 +17,7 @@ limitations under the License.
 package simulator
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -186,6 +187,13 @@ func TestFindEmptyNodes(t *testing.T) {
 	assert.Equal(t, []*apiv1.Node{node2, node3, node4}, emptyNodes)
 }
 
+type findNodesToRemoveTestConfig struct {
+	name       string
+	candidates []*apiv1.Node
+	allNodes   []*apiv1.Node
+	toRemove   []NodeToBeRemoved
+}
+
 func TestFindNodesToRemove(t *testing.T) {
 	emptyNode := BuildTestNode("n1", 1000, 2000000)
 
@@ -223,59 +231,58 @@ func TestFindNodesToRemove(t *testing.T) {
 		PodsToReschedule: []*apiv1.Pod{pod1, pod2},
 	}
 
-	var candidates, allNodes []*apiv1.Node
-	var nodeNameToNodeInfo map[string]*schedulercache.NodeInfo
 	pods := []*apiv1.Pod{pod1, pod2, pod3, pod4}
 	predicateChecker := NewTestPredicateChecker()
 	tracker := NewUsageTracker()
 
-	// just an empty node, should be removed
-	candidates = []*apiv1.Node{emptyNode}
-	allNodes = []*apiv1.Node{emptyNode}
-	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
-	toRemove, _, err := FindNodesToRemove(
-		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
-		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
-	assert.NoError(t, err)
-	assert.Equal(t, toRemove, []NodeToBeRemoved{emptyNodeToRemove})
+	tests := []findNodesToRemoveTestConfig{
+		// just an empty node, should be removed
+		{
+			name:       "just an empty node, should be removed",
+			candidates: []*apiv1.Node{emptyNode},
+			allNodes:   []*apiv1.Node{emptyNode},
+			toRemove:   []NodeToBeRemoved{emptyNodeToRemove},
+		},
+		// just a drainable node, but nowhere for pods to go to
+		{
+			name:       "just a drainable node, but nowhere for pods to go to",
+			candidates: []*apiv1.Node{drainableNode},
+			allNodes:   []*apiv1.Node{drainableNode},
+			toRemove:   []NodeToBeRemoved{},
+		},
+		// drainable node, and a mostly empty node that can take its pods
+		{
+			name:       "drainable node, and a mostly empty node that can take its pods",
+			candidates: []*apiv1.Node{drainableNode, nonDrainableNode},
+			allNodes:   []*apiv1.Node{drainableNode, nonDrainableNode},
+			toRemove:   []NodeToBeRemoved{drainableNodeToRemove},
+		},
+		// drainable node, and a full node that cannot fit anymore pods
+		{
+			name:       "drainable node, and a full node that cannot fit anymore pods",
+			candidates: []*apiv1.Node{drainableNode},
+			allNodes:   []*apiv1.Node{drainableNode, fullNode},
+			toRemove:   []NodeToBeRemoved{},
+		},
+		// 4 nodes, 1 empty, 1 drainable
+		{
+			name:       "4 nodes, 1 empty, 1 drainable",
+			candidates: []*apiv1.Node{emptyNode, drainableNode},
+			allNodes:   []*apiv1.Node{emptyNode, drainableNode, fullNode, nonDrainableNode},
+			toRemove:   []NodeToBeRemoved{emptyNodeToRemove, drainableNodeToRemove},
+		},
+	}
 
-	// just a drainable node, but nowhere for pods to go to
-	candidates = []*apiv1.Node{drainableNode}
-	allNodes = []*apiv1.Node{drainableNode}
-	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
-	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
-		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
-	assert.NoError(t, err)
-	assert.Equal(t, toRemove, []NodeToBeRemoved{})
+	for _, test := range tests {
+		nodeNameToNodeInfo := schedulercache.CreateNodeNameToInfoMap(pods, test.allNodes)
+		toRemove, _, err := FindNodesToRemove(
+			test.candidates, test.allNodes, nodeNameToNodeInfo, pods, nil,
+			predicateChecker, len(test.allNodes), true, map[string]string{},
+			tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
+		assert.NoError(t, err)
+		fmt.Printf("Test scenario: %s, found len(toRemove)=%v, expected len(test.toRemove)=%v\n", test.name, len(toRemove), len(test.toRemove))
+		assert.Equal(t, toRemove, test.toRemove)
 
-	// drainable node, and a mostly empty node that can take its pods
-	candidates = []*apiv1.Node{drainableNode, nonDrainableNode}
-	allNodes = []*apiv1.Node{drainableNode, nonDrainableNode}
-	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
-	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
-		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
-	assert.NoError(t, err)
-	assert.Equal(t, toRemove, []NodeToBeRemoved{drainableNodeToRemove})
+	}
 
-	// drainable node, and a full node that cannot fit anymore pods
-	candidates = []*apiv1.Node{drainableNode}
-	allNodes = []*apiv1.Node{drainableNode, fullNode}
-	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
-	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
-		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
-	assert.NoError(t, err)
-	assert.Equal(t, toRemove, []NodeToBeRemoved{})
-
-	// 4 nodes, 1 empty, 1 drainable
-	candidates = []*apiv1.Node{emptyNode, drainableNode}
-	allNodes = []*apiv1.Node{emptyNode, drainableNode, fullNode, nonDrainableNode}
-	nodeNameToNodeInfo = schedulercache.CreateNodeNameToInfoMap(pods, allNodes)
-	toRemove, _, err = FindNodesToRemove(
-		candidates, allNodes, nodeNameToNodeInfo, pods, nil, predicateChecker, len(allNodes),
-		true, map[string]string{}, tracker, time.Now(), []*policyv1.PodDisruptionBudget{})
-	assert.NoError(t, err)
-	assert.Equal(t, toRemove, []NodeToBeRemoved{emptyNodeToRemove, drainableNodeToRemove})
 }
