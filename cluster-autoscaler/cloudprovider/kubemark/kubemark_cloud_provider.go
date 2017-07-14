@@ -106,6 +106,7 @@ func (kubemark *KubemarkCloudProvider) NodeGroupForNode(node *apiv1.Node) (cloud
 			return kubemark.nodeGroups[i], nil
 		}
 	}
+	glog.Infof("Nodegroup for node %v not found.", node.ObjectMeta.Name)
 	return nil, nil
 }
 

@@ -40,6 +40,8 @@ const (
 	nodeGroupLabel    = "autoscaling.k8s.io/nodegroup"
 )
 
+var r *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 // KubemarkManager
 type KubemarkManager struct {
 	nodeTemplate      *apiv1.ReplicationController
@@ -136,10 +138,12 @@ func (kubemarkManager *KubemarkManager) GetNodeGroupForNode(nodeName string) (st
 			if ok {
 				return nodeGroup, nil
 			}
-			return "", fmt.Errorf("Can't find nodegroup for node %s. Node exists but does not have the nodeGroupName label.", nodeName)
+			glog.Warningf("Can't find nodegroup for node %s. Node exists but does not have the nodeGroupName label.", nodeName)
+			return "", nil
 		}
 	}
-	return "", fmt.Errorf("Can't find nodegroup for node %s", nodeName)
+	glog.Warningf("Can't find nodegroup for node %s", nodeName)
+	return "", nil
 }
 
 func (kubemarkManager *KubemarkManager) DeleteNode(nodeGroup *NodeGroup, node string) error {
@@ -259,6 +263,15 @@ func (kubemarkManager *KubemarkManager) getNodeNameForPod(podName string) (strin
 		}
 	}
 	return "", fmt.Errorf("pod %s not found", podName)
+}
+
+func RandomString(strlen int) string {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	result := make([]byte, strlen)
+	for i := range result {
+		result[i] = chars[r.Intn(len(chars))]
+	}
+	return string(result)
 }
 
 func (kubemarkManager *KubemarkManager) addNodeToNodeGroup(nodeGroup *NodeGroup) error {
