@@ -73,6 +73,8 @@ func (b CloudProviderBuilder) Build(discoveryOpts cloudprovider.NodeGroupDiscove
 		if err != nil {
 			glog.Fatalf("Failed to create GCE cloud provider: %v", err)
 		}
+
+		return cloudProvider
 	}
 
 	if b.cloudProviderFlag == "aws" {
@@ -95,6 +97,8 @@ func (b CloudProviderBuilder) Build(discoveryOpts cloudprovider.NodeGroupDiscove
 		if err != nil {
 			glog.Fatalf("Failed to create AWS cloud provider: %v", err)
 		}
+
+		return cloudProvider
 	}
 
 	if b.cloudProviderFlag == "azure" {
@@ -119,6 +123,8 @@ func (b CloudProviderBuilder) Build(discoveryOpts cloudprovider.NodeGroupDiscove
 		if err != nil {
 			glog.Fatalf("Failed to create Azure cloud provider: %v", err)
 		}
+
+		return cloudProvider
 	}
 
 	if b.cloudProviderFlag == kubemark.ProviderName {
@@ -147,7 +153,8 @@ func (b CloudProviderBuilder) Build(discoveryOpts cloudprovider.NodeGroupDiscove
 		if err != nil {
 			glog.Fatalf("Failed to create Kubemark cloud provider: %v", err)
 		}
+		return cloudProvider
 	}
-
-	return cloudProvider
+	glog.Fatalf("Unexpected cloud provider name %s, bye!", b.cloudProviderFlag)
+	return nil
 }
