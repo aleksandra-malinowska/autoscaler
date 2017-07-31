@@ -353,16 +353,18 @@ func (kubemarkCluster *KubemarkCluster) removeUnneededNodes(oldObj interface{}, 
 	}
 	for _, condition := range newNode.Status.Conditions {
 		if condition.Type == apiv1.NodeReady && condition.Status != apiv1.ConditionTrue {
+			glog.Infof("New node: %v, deleting!", newNode)
 			kubemarkCluster.nodesToDeleteLock.Lock()
 			defer kubemarkCluster.nodesToDeleteLock.Unlock()
 			if kubemarkCluster.nodesToDelete[newNode.Name] {
 				kubemarkCluster.nodesToDelete[newNode.Name] = false
 				if err := kubemarkCluster.client.CoreV1().Nodes().Delete(newNode.Name, &metav1.DeleteOptions{}); err != nil {
-					glog.Error("Failed to delete node %s from kubemark cluster", newNode.Name)
+					glog.Error("Failed to delete node %s from kubemark cluster, err: %v", newNode.Name, err)
 				}
 			}
 			return
 		}
+		glog.Infof("New node: %v, leaving!", newNode)
 	}
 }
 
