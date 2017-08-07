@@ -267,6 +267,7 @@ func (sd *ScaleDown) TryToScaleDown(nodes []*apiv1.Node, pods []*apiv1.Pod, pdbs
 	emptyNodes := getEmptyNodes(candidates, pods, sd.context.MaxEmptyBulkDelete, sd.context.CloudProvider)
 	if len(emptyNodes) > 0 {
 		confirmation := make(chan errors.AutoscalerError, len(emptyNodes))
+		glog.V(0).Infof("Found %v empty nodes", len(emptyNodes))
 		for _, node := range emptyNodes {
 			glog.V(0).Infof("Scale-down: removing empty node %s", node.Name)
 			sd.context.LogRecorder.Eventf(apiv1.EventTypeNormal, "ScaleDownEmpty", "Scale-down: removing empty node %s", node.Name)
@@ -353,6 +354,7 @@ func (sd *ScaleDown) TryToScaleDown(nodes []*apiv1.Node, pods []*apiv1.Pod, pdbs
 // that can be deleted at the same time.
 func getEmptyNodes(candidates []*apiv1.Node, pods []*apiv1.Pod, maxEmptyBulkDelete int, cloudProvider cloudprovider.CloudProvider) []*apiv1.Node {
 	emptyNodes := simulator.FindEmptyNodesToRemove(candidates, pods)
+	glog.Infof("Empty node candidates: %v", emptyNodes)
 	availabilityMap := make(map[string]int)
 	result := make([]*apiv1.Node, 0)
 	for _, node := range emptyNodes {
@@ -388,6 +390,7 @@ func getEmptyNodes(candidates []*apiv1.Node, pods []*apiv1.Pod, maxEmptyBulkDele
 	if len(result) < limit {
 		limit = len(result)
 	}
+	glog.Infof("Final empty nodes found: %v, to remove: %v", len(result), limit)
 	return result[:limit]
 }
 
