@@ -44,12 +44,12 @@ var r *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // KubemarkManager
 type KubemarkManager struct {
-	nodeTemplate      *apiv1.ReplicationController
-	externalCluster   ExternalCluster
-	kubemarkCluster   KubemarkCluster
-	createNodeQueue   chan *apiv1.ReplicationController
-	nodeGroupSizeLock sync.Mutex
-	nodeGroupSize     map[string]int
+	nodeTemplate           *apiv1.ReplicationController
+	externalCluster        ExternalCluster
+	kubemarkCluster        KubemarkCluster
+	createNodeQueue        chan *apiv1.ReplicationController
+	nodeGroupQueueSizeLock sync.Mutex
+	nodeGroupQueueSize     map[string]int
 }
 
 type ExternalCluster struct {
@@ -80,9 +80,9 @@ func CreateKubemarkManager(externalClient kube_client.Interface, kubemarkClient 
 			nodesToDelete:     make(map[string]bool),
 			nodesToDeleteLock: sync.Mutex{},
 		},
-		createNodeQueue:   make(chan *apiv1.ReplicationController),
-		nodeGroupSizeLock: sync.Mutex{},
-		nodeGroupSize:     make(map[string]int),
+		createNodeQueue:        make(chan *apiv1.ReplicationController, 1000),
+		nodeGroupQueueSizeLock: sync.Mutex{},
+		nodeGroupQueueSize:     make(map[string]int),
 	}
 
 	externalInformerFactory.Start(stop)
@@ -154,12 +154,9 @@ func (kubemarkManager *KubemarkManager) DeleteNode(nodeGroup *NodeGroup, node st
 				return fmt.Errorf("Can't delete node %s from nodegroup %s. Node is not in nodegroup.", node, nodeGroup.Name)
 			}
 			policy := metav1.DeletePropagationForeground
-			kubemarkManager.nodeGroupSizeLock.Lock()
-			defer kubemarkManager.nodeGroupSizeLock.Unlock()
 			err := kubemarkManager.externalCluster.client.CoreV1().ReplicationControllers(namespaceKubemark).Delete(
 				pod.ObjectMeta.Labels["name"],
 				&metav1.DeleteOptions{PropagationPolicy: &policy})
-			kubemarkManager.nodeGroupSize[nodeGroup.Name]--
 			if err != nil {
 				return err
 			}
@@ -196,9 +193,14 @@ func (kubemarkManager *KubemarkManager) GetNodeGroupSize(nodeGroup *NodeGroup) (
 }
 
 func (kubemarkManager *KubemarkManager) GetNodeGroupTargetSize(nodeGroup *NodeGroup) (int, error) {
-	kubemarkManager.nodeGroupSizeLock.Lock()
-	defer kubemarkManager.nodeGroupSizeLock.Unlock()
-	return kubemarkManager.nodeGroupSize[nodeGroup.Name], nil
+	realSize, err := kubemarkManager.GetNodeGroupSize(nodeGroup)
+	if err != nil {
+		return realSize, err
+	}
+
+	kubemarkManager.nodeGroupQueueSizeLock.Lock()
+	defer kubemarkManager.nodeGroupQueueSizeLock.Unlock()
+	return realSize + kubemarkManager.nodeGroupQueueSize[nodeGroup.Name], nil
 }
 
 func (kubemarkManager *KubemarkManager) AddNodesToNodeGroup(nodeGroup *NodeGroup, delta int) error {
@@ -283,23 +285,22 @@ func (kubemarkManager *KubemarkManager) addNodeToNodeGroup(nodeGroup *NodeGroup)
 	node.Name = nodeGroup.Name + "-" + RandomString(12)
 	node.Labels = map[string]string{nodeGroupLabel: nodeGroup.Name, "name": node.Name, kindLabel: hollowNodeName}
 	node.Spec.Template.Labels = node.Labels
-	kubemarkManager.nodeGroupSizeLock.Lock()
-	defer kubemarkManager.nodeGroupSizeLock.Unlock()
-	kubemarkManager.nodeGroupSize[nodeGroup.Name]++
+	kubemarkManager.nodeGroupQueueSizeLock.Lock()
+	defer kubemarkManager.nodeGroupQueueSizeLock.Unlock()
+	kubemarkManager.nodeGroupQueueSize[nodeGroup.Name]++
 	kubemarkManager.createNodeQueue <- node
 	return nil
 }
 
 func (kubemarkManager *KubemarkManager) runReplicationControllerCreation(stop <-chan struct{}) {
-
 	for {
 		select {
 		case node := <-kubemarkManager.createNodeQueue:
+			kubemarkManager.nodeGroupQueueSizeLock.Lock()
 			_, err := kubemarkManager.externalCluster.client.CoreV1().ReplicationControllers(node.Namespace).Create(node)
-			if err != nil {
-				glog.Infof("Failed to create node %s: %v", node.Name, err)
-				kubemarkManager.createNodeQueue <- node
-			}
+			glog.Errorf("Failed to create node %s: %v", node.Name, err)
+			kubemarkManager.nodeGroupQueueSize[node.Labels[nodeGroupLabel]]--
+			kubemarkManager.nodeGroupQueueSizeLock.Unlock()
 		case <-stop:
 			return
 		}
