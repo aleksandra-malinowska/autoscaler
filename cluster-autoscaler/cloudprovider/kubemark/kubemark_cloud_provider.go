@@ -55,13 +55,11 @@ func (kubemark *KubemarkCloudProvider) addNodeGroup(spec string) error {
 	if err != nil {
 		return err
 	}
-	glog.Infof("Nodegroup: %+v", nodeGroup)
 	err = kubemark.kubemarkManager.RegisterNodeGroup(nodeGroup)
 	if err != nil {
 		return err
 	}
 	kubemark.nodeGroups = append(kubemark.nodeGroups, nodeGroup)
-	glog.Infof("Nodegroups: +%v", kubemark.nodeGroups)
 	return nil
 }
 
@@ -76,7 +74,10 @@ func (kubemark *KubemarkCloudProvider) NodeGroups() []cloudprovider.NodeGroup {
 	for _, nodegroup := range kubemark.nodeGroups {
 		result = append(result, nodegroup)
 	}
-	glog.Infof("Nodegroups: %+v", result)
+	names := make([]string, 0)
+	for name := range names {
+		names = append(names, name)
+	}
 	return result
 }
 

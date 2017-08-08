@@ -280,7 +280,7 @@ func (kubemarkManager *KubemarkManager) addNodeToNodeGroup(nodeGroup *NodeGroup)
 		return err
 	}
 	node := templateCopy.(*apiv1.ReplicationController)
-	node.Name = nodeGroup.Name + "-" + fmt.Sprint(rand.Int63())
+	node.Name = nodeGroup.Name + "-" + RandomString(12)
 	node.Labels = map[string]string{nodeGroupLabel: nodeGroup.Name, "name": node.Name, kindLabel: hollowNodeName}
 	node.Spec.Template.Labels = node.Labels
 	kubemarkManager.nodeGroupSizeLock.Lock()
@@ -353,7 +353,6 @@ func (kubemarkCluster *KubemarkCluster) removeUnneededNodes(oldObj interface{}, 
 	}
 	for _, condition := range newNode.Status.Conditions {
 		if condition.Type == apiv1.NodeReady && condition.Status != apiv1.ConditionTrue {
-			glog.Infof("New node: %v, deleting!", newNode)
 			kubemarkCluster.nodesToDeleteLock.Lock()
 			defer kubemarkCluster.nodesToDeleteLock.Unlock()
 			if kubemarkCluster.nodesToDelete[newNode.Name] {
@@ -364,7 +363,6 @@ func (kubemarkCluster *KubemarkCluster) removeUnneededNodes(oldObj interface{}, 
 			}
 			return
 		}
-		glog.Infof("New node: %v, leaving!", newNode)
 	}
 }
 
