@@ -122,6 +122,8 @@ func FindEmptyNodesToRemove(candidates []*apiv1.Node, pods []*apiv1.Pod) []*apiv
 			podsToRemove, err := FastGetPodsToMove(nodeInfo, true, true, nil)
 			if err == nil && len(podsToRemove) == 0 {
 				result = append(result, node)
+			} else {
+				glog.Infof("Found %v pods on node %v, pods: %+v", len(podsToRemove), node.Name, podsToRemove)
 			}
 		} else {
 			// Node without pods.

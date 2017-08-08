@@ -75,7 +75,7 @@ func (kubemark *KubemarkCloudProvider) NodeGroups() []cloudprovider.NodeGroup {
 		result = append(result, nodegroup)
 	}
 	names := make([]string, 0)
-	for name := range names {
+	for _, name := range names {
 		names = append(names, name)
 	}
 	return result

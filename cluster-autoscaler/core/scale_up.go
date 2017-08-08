@@ -81,11 +81,17 @@ func ScaleUp(context *AutoscalingContext, unschedulablePods []*apiv1.Pod, nodes 
 			continue
 		}
 
+		s := time.Now()
+		glog.Info("Checking node group target size")
+
 		currentSize, err := nodeGroup.TargetSize()
 		if err != nil {
 			glog.Errorf("Failed to get node group size: %v", err)
 			continue
 		}
+
+		glog.Infof("Checking node group target size took %v", time.Now().Sub(s))
+
 		if currentSize >= nodeGroup.MaxSize() {
 			// skip this node group.
 			glog.V(4).Infof("Skipping node group %s - max size reached", nodeGroup.Id())
@@ -103,6 +109,9 @@ func ScaleUp(context *AutoscalingContext, unschedulablePods []*apiv1.Pod, nodes 
 			continue
 		}
 
+		s = time.Now()
+		glog.Info("Checking predicates")
+
 		for _, pod := range unschedulablePods {
 			err = context.PredicateChecker.CheckPredicates(pod, nodeInfo)
 			if err == nil {
@@ -115,9 +124,15 @@ func ScaleUp(context *AutoscalingContext, unschedulablePods []*apiv1.Pod, nodes 
 				}
 			}
 		}
+
+		glog.Infof("Checking predicates took %v", time.Now().Sub(s))
+
 		passingPods := make([]*apiv1.Pod, len(option.Pods))
 		copy(passingPods, option.Pods)
 		podsPassingPredicates[nodeGroup.Id()] = passingPods
+
+		s = time.Now()
+		glog.Infof("Estimating")
 
 		if len(option.Pods) > 0 {
 			if context.EstimatorName == estimator.BinpackingEstimatorName {
@@ -140,6 +155,8 @@ func ScaleUp(context *AutoscalingContext, unschedulablePods []*apiv1.Pod, nodes 
 		} else {
 			glog.V(4).Infof("No pod can fit to %s", nodeGroup.Id())
 		}
+
+		glog.Infof("Estimating took %v", time.Now().Sub(s))
 	}
 
 	if len(expansionOptions) == 0 {
