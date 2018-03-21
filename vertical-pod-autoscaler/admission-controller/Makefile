@@ -1,7 +1,7 @@
 all: build
 
-TAG?=0.0.1
-REGISTRY?=gcr.io/kubernetes-develop
+TAG?=0.0.5
+REGISTRY?=
 FLAGS=
 ENVVAR=
 GOOS?=linux

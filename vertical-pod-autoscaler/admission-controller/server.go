@@ -21,13 +21,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/admission/v1beta1"
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/autoscaler/vertical-pod-autoscaler/admission-controller/logic"
 	vpa_types "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/poc.autoscaling.k8s.io/v1alpha1"
+	autoscaling "k8s.io/api/autoscaling/v2beta1"
 )
 
 type admissionServer struct {
@@ -40,27 +41,24 @@ type patchRecord struct {
 	Value interface{} `json:"value"`
 }
 
-func (s *admissionServer) getPatchesForPodResourceRequest(raw []byte, namespace string) ([]patchRecord, error) {
-	pod := v1.Pod{}
-	if err := json.Unmarshal(raw, &pod); err != nil {
+func (s *admissionServer) getPatchesForHpaResourceRequest(raw []byte, namespace string) ([]patchRecord, error) {
+	hpa := autoscaling.HorizontalPodAutoscaler{}
+	if err := json.Unmarshal(raw, &hpa); err != nil {
 		return nil, err
 	}
-	if len(pod.Name) == 0 {
-		pod.Name = pod.GenerateName + "%"
-		pod.Namespace = namespace
-	}
-	glog.V(4).Infof("Admitting pod %v", pod.ObjectMeta)
-	requests, err := s.recommendationProvider.GetRequestForPod(&pod)
-	if err != nil {
-		return nil, err
-	}
+	glog.Infof("Admitting hpa %v", hpa.ObjectMeta)
 	patches := []patchRecord{}
-	for i, resources := range requests {
-		for resource, request := range resources {
-			patches = append(patches, patchRecord{
+	for i, metric := range hpa.Spec.Metrics {
+		if metric.Type == autoscaling.ExternalMetricSourceType && metric.External != nil {
+			name := metric.External.MetricName
+			glog.Errorf("External metric %v %v", i, metric.External.MetricName)
+			if strings.Contains(name, "/") {
+				glog.Errorf("Replacing")
+				patches = append(patches, patchRecord{
 				Op:    "add",
-				Path:  fmt.Sprintf("/spec/containers/%d/resources/requests/%s", i, resource),
-				Value: request.String()})
+				Path:  fmt.Sprintf("/spec/metrics/%d/external/metricName", i),
+				Value: strings.Replace(name, "/", "\\|", -1)})
+			}
 		}
 	}
 	return patches, nil
@@ -86,6 +84,7 @@ func getPatchesForVPADefaults(raw []byte) ([]patchRecord, error) {
 
 // only allow pods to pull images from specific registry.
 func (s *admissionServer) admit(data []byte) *v1beta1.AdmissionResponse {
+	glog.Infof("Got request")
 	ar := v1beta1.AdmissionReview{}
 	if err := json.Unmarshal(data, &ar); err != nil {
 		glog.Error(err)
@@ -93,18 +92,15 @@ func (s *admissionServer) admit(data []byte) *v1beta1.AdmissionResponse {
 	}
 	// The externalAdmissionHookConfiguration registered via selfRegistration
 	// asks the kube-apiserver only sends admission request regarding pods.
-	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	vpaResource := metav1.GroupVersionResource{Group: "poc.autoscaling.k8s.io", Version: "v1alpha1", Resource: "verticalpodautoscalers"}
+	hpaResource := metav1.GroupVersionResource{Group: "autoscaling", Version: "v2beta1", Resource: "horizontalpodautoscalers"}
 	var patches []patchRecord
 	var err error
 
 	switch ar.Request.Resource {
-	case podResource:
-		patches, err = s.getPatchesForPodResourceRequest(ar.Request.Object.Raw, ar.Request.Namespace)
-	case vpaResource:
-		patches, err = getPatchesForVPADefaults(ar.Request.Object.Raw)
+	case hpaResource:
+		patches, err = s.getPatchesForHpaResourceRequest(ar.Request.Object.Raw, ar.Request.Namespace)
 	default:
-		patches, err = nil, fmt.Errorf("expected the resource to be %v or %v", podResource, vpaResource)
+		patches, err = nil, fmt.Errorf("expected the resource to be %v", hpaResource)
 	}
 
 	if err != nil {
