@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"github.com/golang/glog"
+	"k8s.io/autoscaler/vertical-pod-autoscaler/admission-controller/logic"
 	vpa_clientset "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	vpa_lister "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/listers/poc.autoscaling.k8s.io/v1alpha1"
 	vpa_api_util "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/vpa"
@@ -43,7 +44,9 @@ func newReadyVPALister(stopChannel <-chan struct{}) vpa_lister.VerticalPodAutosc
 func main() {
 	flag.Parse()
 	certs := initCerts(*certsDir)
-	as := &admissionServer{nil}
+	stopChannel := make(chan struct{})
+	vpaLister := newReadyVPALister(stopChannel)
+	as := &admissionServer{logic.NewRecommendationProvider(vpaLister)}
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		as.serve(w, r)
 	})

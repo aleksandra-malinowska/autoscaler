@@ -102,12 +102,19 @@ func selfRegistration(clientset *kubernetes.Clientset, caCert []byte) {
 					{
 						Operations: []v1beta1.OperationType{v1beta1.Create, v1beta1.Update},
 						Rule: v1beta1.Rule{
-							APIGroups:   []string{"autoscaling"},
-							APIVersions: []string{"v2beta1"},
-							Resources:   []string{"horizontalpodautoscalers"},
+							APIGroups:   []string{""},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"pods"},
 						},
 					},
-				},
+					{
+						Operations: []v1beta1.OperationType{v1beta1.Create, v1beta1.Update},
+						Rule: v1beta1.Rule{
+							APIGroups:   []string{"poc.autoscaling.k8s.io"},
+							APIVersions: []string{"v1alpha1"},
+							Resources:   []string{"verticalpodautoscalers"},
+						},
+					}},
 				ClientConfig: v1beta1.WebhookClientConfig{
 					Service: &v1beta1.ServiceReference{
 						Namespace: "kube-system",
