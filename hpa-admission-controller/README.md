@@ -1,4 +1,4 @@
-# VPA Admission Controller
+# HPA Stackdriver Admission Controller
 
 ## Intro
 
