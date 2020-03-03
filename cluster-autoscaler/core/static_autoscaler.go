@@ -250,8 +250,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) errors.AutoscalerError
 	}
 
 	// Call CloudProvider.Refresh before any other calls to cloud provider.
-	err = a.AutoscalingContext.CloudProvider.Refresh()
-	if err != nil {
+	if err = a.AutoscalingContext.CloudProvider.Refresh(); err != nil {
 		klog.Errorf("Failed to refresh cloud provider config: %v", err)
 		return errors.ToAutoscalerError(errors.CloudProviderError, err)
 	}
